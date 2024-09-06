@@ -1,1 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+.env
+.vscode/
+.pytest_cache/
+.mypy_cache/
+.tox/
+*.log
+*.sqlite3
 
