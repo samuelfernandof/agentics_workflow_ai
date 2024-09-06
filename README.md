@@ -9,11 +9,9 @@ Este projeto é uma implementação de um fluxo de trabalho de agentes para gera
 - Dockerfile - Configuração do Docker
 - docker-compose.yml - Orquestração dos contêineres
 
-  # Estrutura do Projeto
-
-Aqui está a estrutura do diretório para o projeto `agentics-workflow`:
-
+## Estrutura do Diretório 
 agentics-workflow/ ├── Dockerfile ├── docker-compose.yml ├── .gitignore ├── README.md ├── src/ │ ├── init.py │ ├── main.py │ ├── state.py │ ├── nodes.py │ ├── prompts.py │ ├── tavily_client.py │ ├── document_reader.py │ └── utils.py └── tests/ ├── init.py └── test_nodes.py
+
 
 ## Como Rodar
 
