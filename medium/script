@@ -1,1 +1,166 @@
 
+
+1. **Definindo o Estado do Agente**
+
+```python
+# Inicializa o SQLite em memória para persistência de estado
+memory = SqliteSaver.from_conn_string(":memory:")
+
+# Definição do estado do agente
+class AgentState(TypedDict):
+    task: str  # Tarefa atual
+    plan: str  # Plano para o relatório
+    draft: str  # Versão preliminar do documento
+    critique: str  # Feedback sobre o documento
+    content: List[str]  # Conteúdo extraído
+    sources: List[str]  # Fontes consultadas
+    revision_number: int  # Número de revisões realizadas
+    max_revisions: int  # Número máximo de revisões permitidas
+```
+
+Aqui, estamos utilizando um banco de dados SQLite em memória para armazenar o estado do agente, e o `AgentState` é um `TypedDict` para garantir que os dados sejam manipulados corretamente.
+
+### Melhorias sugeridas:
+
+- Em vez de usar `:memory:`, você pode optar por um arquivo físico para persistência entre execuções.
+- Adicione mais validações ao `AgentState` para garantir que os valores estejam no formato esperado.
+
+---
+
+2. **Definição de Prompts para Diversas Etapas**
+
+```python
+# Definição dos prompts para cada fase do processo
+
+PLAN_PROMPT = """Você é um escritor especializado em relatórios empresariais. \
+Escreva um esboço para o relatório sobre o tema fornecido pelo usuário."""
+
+WRITER_PROMPT = """Você é um assistente de relatórios. \
+Gere o melhor relatório possível com base na solicitação do usuário e no esboço inicial. Use as informações fornecidas abaixo:
+
+{content}
+
+Fontes:
+{sources}"""
+
+REFLECTION_PROMPT = """Você é um consultor sênior revisando um relatório empresarial. \
+Forneça críticas detalhadas e recomendações sobre o documento."""
+```
+
+### Melhorias sugeridas:
+
+- A personalização desses prompts com exemplos reais pode tornar a interação mais próxima da realidade empresarial.
+- No `WRITER_PROMPT`, inclua mais estrutura, como formato de seção, para que o resultado seja mais uniforme.
+
+---
+
+3. **Inicializando o Cliente Tavily**
+
+```python
+# Inicializa o cliente Tavily para pesquisas
+from tavily import TavilyClient
+tavily = TavilyClient(api_key="your-key")
+```
+
+O Tavily quebra as consultas em subconsultas otimizadas, ajudando na busca de informações mais precisas.
+
+---
+
+4. **Configuração dos Nós (Nodes)**
+
+Aqui, são criadas as funções para cada fase do processo. Vou explicar algumas funções e fazer melhorias.
+
+- **Leitura de Documentos**:
+
+```python
+def read_documents_from_folder(folder_path):
+    documents = []
+    sources = []
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".md"):  # Suporte para mais tipos de arquivos
+            with open(os.path.join(folder_path, filename), 'r') as file:
+                documents.append(file.read())
+                sources.append(filename)
+    return documents, sources
+```
+
+**Melhoria:** Adicione suporte para mais tipos de arquivos como `.txt` ou `.pdf`.
+
+---
+
+- **Geração de Plano**:
+
+```python
+def plan_node(state: AgentState):
+    messages = [
+        SystemMessage(content=PLAN_PROMPT),
+        HumanMessage(content=state['task'])
+    ]
+    response = model.invoke(messages)
+    return {"plan": response.content}
+```
+
+Aqui, o modelo gera um plano para o relatório com base na tarefa fornecida.
+
+**Melhoria:** Você pode gerar múltiplos planos e escolher o melhor baseado em algum critério de avaliação.
+
+---
+
+- **Geração de Relatório**:
+
+```python
+def generation_node(state: AgentState):
+    content = "\n\n".join(state['content'] or [])
+    sources = "\n".join(state['sources'] or [])
+    user_message = HumanMessage(
+        content=f"{state['task']}\n\nAqui está o plano:\n\n{state['plan']}")
+    messages = [
+        SystemMessage(
+            content=WRITER_PROMPT.format(content=content, sources=sources)
+        ),
+        user_message
+    ]
+    response = model.invoke(messages)
+    return {
+        "draft": response.content,
+        "revision_number": state.get("revision_number", 1) + 1
+    }
+```
+
+Aqui o rascunho do relatório é gerado com base no conteúdo e nas fontes extraídas.
+
+---
+
+5. **Construção do Grafo de Estados**
+
+```python
+builder = StateGraph(AgentState)
+builder.add_node("planner", plan_node)
+builder.add_node("generate", generation_node)
+builder.add_node("reflect", reflection_node)
+builder.add_node("research_plan", research_plan_node)
+builder.add_node("document_analysis", document_analysis_node)
+builder.add_node("research_critique", research_critique_node)
+builder.set_entry_point("planner")
+```
+
+Esse bloco constrói um grafo de estados, conectando as diversas funções.
+
+**Melhoria:** Adicione mais nós para revisar diferentes aspectos do relatório, como estilo e precisão técnica.
+
+---
+
+6. **Executando a Tarefa**
+
+```python
+thread = {"configurable": {"thread_id": "1"}}
+for s in graph.stream({
+    'task': "A Take-it-easy.Inc está enfrentando queda nas vendas...",
+    "max_revisions": 2,
+    "revision_number": 1,
+}, thread):
+    print(s)
+```
+
+**Melhoria:** O uso de `stream` é interessante para gerar saídas incrementais. Certifique-se de que o feedback seja gerado em tempo real.
+
